@@ -1,11 +1,16 @@
-"""Flatten prospectus extraction JSON into tidy CSV tables.
+"""Flatten prospectus extraction JSON into tidy CSV tables and/or SQLite.
 
-Usage: python3 extraction_to_tables.py <out_dir> <file.extraction.json> [more.json ...]
+Usage: python3 extraction_to_tables.py <out_dir> <file.extraction.json> [more.json ...] [--sqlite <path.db>]
 
 Pure stdlib — no installs. Writes relational, long-format tables keyed by
 document_id so any number of prospectuses land in ONE set of files that load
-straight into Excel, SQLite (`sqlite3 db ".import --csv fields.csv fields"`),
-pandas, or a warehouse:
+straight into Excel, pandas, or a warehouse. With --sqlite it ALSO loads the
+same tables into a SQLite database directly: values keep their types (numbers
+stay numeric, unlike a CSV .import), an index on document_id is created, and
+re-ingesting a document is idempotent — its old rows are deleted first, so
+re-running after a corrected extraction updates rather than duplicates.
+(Schema migrations are not handled: if the column set changes, drop the
+affected table or start a fresh .db.)
 
   documents.csv             one row per prospectus (type, classification, cusip)
   fields.csv                one row per scalar field — extracted AND derived
@@ -23,6 +28,7 @@ ISO dates) so downstream math needs no cleanup.
 
 import csv
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -47,16 +53,44 @@ def snake(name: str) -> str:
     return "".join(out)
 
 
+def write_sqlite(db_path: str, tables: dict[str, list]) -> None:
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    doc_ids = [(r["document_id"],) for r in tables.get("documents.csv", [])]
+    for name, rows in tables.items():
+        if not rows:
+            continue
+        table = name.removesuffix(".csv")
+        cols = list(rows[0].keys())
+        quoted = ", ".join(f'"{c}"' for c in cols)
+        cur.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({quoted})')
+        cur.execute(f'CREATE INDEX IF NOT EXISTS "idx_{table}_doc" ON "{table}" (document_id)')
+        cur.executemany(f'DELETE FROM "{table}" WHERE document_id = ?', doc_ids)
+        cur.executemany(
+            f'INSERT INTO "{table}" ({quoted}) VALUES ({", ".join("?" for _ in cols)})',
+            [[r.get(c) for c in cols] for r in rows],
+        )
+        print(f"sqlite {table}: {len(rows)} rows")
+    conn.commit()
+    conn.close()
+
+
 def main() -> int:
-    if len(sys.argv) < 3:
+    args = sys.argv[1:]
+    db_path = None
+    if "--sqlite" in args:
+        i = args.index("--sqlite")
+        db_path = args[i + 1]
+        del args[i : i + 2]
+    if len(args) < 2:
         print(__doc__, file=sys.stderr)
         return 2
-    out_dir = Path(sys.argv[1])
+    out_dir = Path(args[0])
     out_dir.mkdir(parents=True, exist_ok=True)
 
     docs, fields, unders, sched, off_schema, findings = [], [], [], [], [], []
 
-    for path in sys.argv[2:]:
+    for path in args[1:]:
         p = Path(path)
         data = json.loads(p.read_text())
         doc_id = p.name.removesuffix(".json").removesuffix(".extraction")
@@ -126,12 +160,18 @@ def main() -> int:
             w.writerows(rows)
         print(f"{name}: {len(rows)} rows")
 
-    write("documents.csv", docs)
-    write("fields.csv", fields)
-    write("underliers.csv", unders)
-    write("observation_schedule.csv", sched)
-    write("off_schema_terms.csv", off_schema)
-    write("findings.csv", findings)
+    tables = {
+        "documents.csv": docs,
+        "fields.csv": fields,
+        "underliers.csv": unders,
+        "observation_schedule.csv": sched,
+        "off_schema_terms.csv": off_schema,
+        "findings.csv": findings,
+    }
+    for name, rows in tables.items():
+        write(name, rows)
+    if db_path:
+        write_sqlite(db_path, tables)
     return 0
 
 

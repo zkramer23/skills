@@ -185,13 +185,16 @@ When the destination is a **database or Excel**, don't hand-build tables —
 flatten the JSON with the bundled exporter:
 
 ```bash
-python3 <this-skill-dir>/scripts/extraction_to_tables.py out_tables/ *.extraction.json
+python3 <this-skill-dir>/scripts/extraction_to_tables.py out_tables/ *.extraction.json [--sqlite notes.db]
 ```
 
 It emits tidy relational CSVs keyed by `document_id` (`documents`, `fields`,
 `underliers`, `observation_schedule`, `off_schema_terms`, `findings`), so a
 whole folder of prospectuses lands in one set of files that import directly
-into Excel, SQLite, or pandas. Evidence page+quote ride along in every row,
+into Excel or pandas. `--sqlite` additionally loads the same tables straight
+into a SQLite database — numbers stay numeric (unlike a CSV `.import`), and
+re-ingesting a document replaces its rows instead of duplicating them, so a
+corrected extraction can be re-run safely against an existing database. Evidence page+quote ride along in every row,
 and derived values appear in `fields.csv` with `source=derived` so nobody
 mistakes a computed term-length for a stated one. If the user wants a single
 `.xlsx` workbook, build it from these CSVs (one sheet per table) with the
