@@ -70,13 +70,15 @@ in the output rather than inventing printed-page numbers.
 Scan roughly the first 6 pages (cover + summary are usually enough) against the
 keyword table in [references/field-schemas.md](references/field-schemas.md),
 then confirm by mechanics. Classify by **mechanics, not marketing name** —
-every dealer brands the same structure differently: UBS "Trigger Callable
-Contingent Yield Notes" and Morgan Stanley "Contingent Income Auto-Callable
-Securities" are both phoenix autocalls (contingent coupon + coupon barrier +
-call feature). Within the contingent-coupon family the **call mechanism picks
-the type**: automatic trigger call → `phoenix_autocall`; issuer-elective call
-→ `phoenix_autocall` with `callType: "issuer"`; no call feature anywhere →
-`contingent_yield_note` (see the decision rule in the reference).
+dealers brand freely, and "callable" in a product name doesn't tell you who
+or what does the calling. Within the contingent-coupon family the **call
+mechanism picks the type**: trigger-automatic call ("will be automatically
+called if…") → `phoenix_autocall`; issuer-elective call ("we may, at our
+election, redeem") → `contingent_yield_note` with `callType: "issuer"`
+(issuer-callable CYN); no call feature anywhere → `contingent_yield_note`.
+The line is drawn there because a phoenix call is **formulaic** — a market
+level alone proves whether it was called — while an issuer call depends on
+issuer economics. See the decision rule in the reference.
 
 If the signals are weak or point at two types, say so and present the
 candidates with their evidence instead of picking one silently — extracting
@@ -132,8 +134,10 @@ happen (each one is a bug class the payout-grapher validator was built for):
 - **Issuer call vs. autocall.** "We may, at our election, redeem" is a
   **discretionary issuer call**; "will be automatically called if the closing
   level is at or above…" is an **automatic** trigger call. Mislabeling this
-  breaks any downstream called/not-called logic, because a market level can
-  prove an autocall but never an issuer call.
+  breaks downstream called/not-called logic (a market level can prove an
+  autocall but never an issuer call) — and it changes the classification:
+  issuer-elective contingent-coupon notes are `contingent_yield_note`, not
+  phoenix.
 - **Underlier structure consistent with the table.** `underlierStructure` and
   the underliers table must agree: `single` ⇒ exactly one row; `worst_of` ⇒
   ≥2 rows with no weights but per-underlier barrier levels; basket structures

@@ -9,10 +9,12 @@ or evidence-free material field is a headline warning.
 This skill's schema extends the repo's where it lacks coverage: the
 `strikeDate`, `underlierStructure`, `nonCallPeriodMonths`, and `stepUp`
 fields (plus `stepDown` on phoenix — the repo has it on snowball only), and
-the `contingent_yield_note` product type (no-call contingent-coupon notes,
-which the repo folds into phoenix). If importing results back into
-payout-grapher, expect the extra fields to land in `unmappedFields` and map
-`contingent_yield_note` to `phoenix_autocall` with null call fields.
+the `contingent_yield_note` product type (contingent-coupon notes with no
+trigger-automatic call — both the no-call and issuer-callable variants, which
+the repo folds into phoenix). If importing results back into payout-grapher,
+expect the extra fields to land in `unmappedFields` and map
+`contingent_yield_note` to `phoenix_autocall` with `autocallTrigger` null and
+`callType` carried through ("issuer" or null).
 
 ## Classification keywords
 
@@ -25,30 +27,38 @@ collide.
 | `accelerated_return_note` | accelerated return, leveraged upside, upside leverage factor, participation rate, enhanced growth |
 | `barrier_note` | downside threshold, knock-in, barrier level, european barrier, trigger level |
 | `snowball_autocall` | snowball, step-down / stepdown, memory coupon (with call premium accruing to call date) |
-| `phoenix_autocall` | phoenix, contingent coupon, contingent yield, contingent income, trigger callable, autocallable / auto-callable, coupon barrier — **and a call feature exists** |
-| `contingent_yield_note` | same contingent coupon/yield/income + barrier language, but **no call or early-redemption feature anywhere in the document** |
+| `phoenix_autocall` | phoenix, contingent coupon/yield/income + coupon barrier, autocallable / auto-callable, "automatically called/redeemed if" — **the call is trigger-automatic** |
+| `contingent_yield_note` | same contingent coupon/yield/income + barrier language but **no trigger-automatic call**: either no call feature at all, or an issuer-elective one ("callable", "we may redeem", redemption-dates list with notice period) |
 | `mlcd` | market-linked CD, market linked certificate, certificate of deposit, FDIC |
 | `digital_income` | digital coupon, digital return, fixed coupon, digital note |
 | `dual_directional` | dual directional, dual-directional, absolute return |
 
 **Coupon-note family decision rule** — contingent-coupon language identifies
-the family; the **call mechanism** picks the type:
+the family; the **call mechanism** picks the type. "Phoenix" is reserved for
+notes whose call outcome is **formulaic** — a market level alone proves
+whether the note was called. When the issuer elects, the call depends on
+issuer economics (funding levels, hedging), not on a printed trigger, so
+those notes are CYNs no matter how "callable" the branding sounds:
 
-- automatic trigger call ("will be automatically called/redeemed if…") →
+- trigger-automatic call ("will be automatically called/redeemed if…") →
   `phoenix_autocall`
 - issuer-elective call ("we may, at our election, redeem", "callable at our
-  option") → `phoenix_autocall` with `callType: "issuer"`
-- **no call or early-redemption feature at all** → `contingent_yield_note`.
-  Don't force a no-call note into phoenix and then report a "missing"
-  autocall trigger — the trigger isn't missing, it doesn't exist, and the
-  note's risk profile (guaranteed to run to maturity) is different.
+  option", a redemption-dates list with a notice period) →
+  `contingent_yield_note` with `callType: "issuer"` (issuer-callable CYN)
+- no call or early-redemption feature at all → `contingent_yield_note` with
+  `callType` null
 
-Dealer-brand hints: UBS "Trigger **Callable** Contingent Yield Notes" and
-Morgan Stanley "Contingent Income Auto-Callable Securities" are phoenix
-autocalls (UBS CYNs typically **issuer-election** calls, not automatic —
-check the call language, not the brand). A UBS "Trigger Yield Note" or any
-contingent-coupon note whose document has no call section is a
-`contingent_yield_note`.
+Don't force a CYN into phoenix and then report a "missing" autocall trigger —
+the trigger isn't missing, it doesn't exist. The classification line matters
+downstream: called/not-called logic can verify a phoenix call from a market
+level, but never an issuer call.
+
+Dealer-brand hints: Morgan Stanley "Contingent Income **Auto-Callable**
+Securities" → phoenix (automatic). UBS "Trigger **Callable** Contingent Yield
+Notes" and Citi "**Callable** Contingent Coupon Notes" are typically
+issuer-election → issuer-callable CYN. Check the call language, not the
+brand. A contingent-coupon note whose document has no call section at all is
+a plain CYN.
 
 ## Common fields (every product type)
 
@@ -115,7 +125,7 @@ contingent-coupon note whose document has no call section is a
 | `settlementType` | text | |
 | `couponBarrier` | percent | ✅ |
 | `autocallTrigger` | percent | ✅ |
-| `callType` (automatic/issuer) | text | |
+| `callType` (should be `automatic` here — issuer-elective reclassifies to `contingent_yield_note`) | text | |
 | `firstCallDate` | date | |
 | `nonCallPeriodMonths` | months | |
 | `stepDown` (autocall trigger step-down per period) | percent | |
@@ -125,10 +135,10 @@ contingent-coupon note whose document has no call section is a
 | `observationFrequency` | text | |
 
 ### contingent_yield_note
-Phoenix minus the call fields — a contingent-coupon note that runs to
-maturity. If you find yourself wanting `autocallTrigger`, `callType`, or
-`firstCallDate` here, the note has a call feature and belongs in
-`phoenix_autocall`.
+A contingent-coupon note whose early redemption is never trigger-automatic —
+either no call feature at all, or an issuer-elective call (issuer-callable
+CYN). If you find yourself wanting `autocallTrigger` or `stepDown` here, the
+note has a formulaic trigger and belongs in `phoenix_autocall`.
 
 | Field | Unit | Material |
 |---|---|---|
@@ -136,6 +146,9 @@ maturity. If you find yourself wanting `autocallTrigger`, `callType`, or
 | `couponBarrier` | percent | ✅ |
 | `knockInLevel` | percent | ✅ |
 | `memoryCoupon` | bool | ✅ |
+| `callType` (`issuer` when issuer-elective; null when no call feature exists) | text | |
+| `firstCallDate` (issuer-callable only) | date | |
+| `nonCallPeriodMonths` (issuer-callable only) | months | |
 | `stepUp` (coupon step-up per period) | percent | |
 | `settlementType` (cash/physical) | text | |
 | `observationFrequency` | text | |
@@ -249,6 +262,9 @@ observe per period — the call columns come back null.
   the issuer's election ("we may, at our election, redeem", "callable at the
   issuer's option/discretion"). When unstated but an autocall trigger level is
   defined, downstream treats it as automatic — leave null and note it.
+  Finding issuer-election language on a note classified as phoenix means the
+  classification is wrong — move it to `contingent_yield_note` (see the
+  coupon-note decision rule).
 - **`firstCallDate` / `nonCallPeriodMonths`** — two statements of the same
   call protection. Documents give either a period ("Non-Call Period: 6
   months", shorthand "NC6"/"NC1") or a date ("callable on any Observation
