@@ -6,12 +6,13 @@ The schema is developer-controlled and closed: extract exactly these fields for
 the classified type, nothing else. **Material** fields are marked — a missing
 or evidence-free material field is a headline warning.
 
-This skill's schema extends the repo's in three places it lacks: the
-`strikeDate` and `underlierStructure` fields, and the `contingent_yield_note`
-product type (no-call contingent-coupon notes, which the repo folds into
-phoenix). If importing results back into payout-grapher, expect the two
-fields to land in `unmappedFields` and map `contingent_yield_note` to
-`phoenix_autocall` with null call fields.
+This skill's schema extends the repo's where it lacks coverage: the
+`strikeDate`, `underlierStructure`, `nonCallPeriodMonths`, and `stepUp`
+fields (plus `stepDown` on phoenix — the repo has it on snowball only), and
+the `contingent_yield_note` product type (no-call contingent-coupon notes,
+which the repo folds into phoenix). If importing results back into
+payout-grapher, expect the extra fields to land in `unmappedFields` and map
+`contingent_yield_note` to `phoenix_autocall` with null call fields.
 
 ## Classification keywords
 
@@ -99,7 +100,9 @@ contingent-coupon note whose document has no call section is a
 | `autocallTrigger` | percent | ✅ |
 | `callType` (automatic/issuer) | text | |
 | `firstCallDate` (end of no-call period) | date | |
-| `stepDown` (per period) | percent | |
+| `nonCallPeriodMonths` | months | |
+| `stepDown` (autocall trigger step-down per period) | percent | |
+| `stepUp` (coupon / call-premium step-up per period) | percent | |
 | `settlementType` | text | |
 | `knockInLevel` | percent | ✅ |
 | `memoryCoupon` | bool | ✅ |
@@ -114,6 +117,9 @@ contingent-coupon note whose document has no call section is a
 | `autocallTrigger` | percent | ✅ |
 | `callType` (automatic/issuer) | text | |
 | `firstCallDate` | date | |
+| `nonCallPeriodMonths` | months | |
+| `stepDown` (autocall trigger step-down per period) | percent | |
+| `stepUp` (coupon step-up per period) | percent | |
 | `knockInLevel` | percent | ✅ |
 | `memoryCoupon` | bool | ✅ |
 | `observationFrequency` | text | |
@@ -130,6 +136,7 @@ maturity. If you find yourself wanting `autocallTrigger`, `callType`, or
 | `couponBarrier` | percent | ✅ |
 | `knockInLevel` | percent | ✅ |
 | `memoryCoupon` | bool | ✅ |
+| `stepUp` (coupon step-up per period) | percent | |
 | `settlementType` (cash/physical) | text | |
 | `observationFrequency` | text | |
 
@@ -145,6 +152,7 @@ maturity. If you find yourself wanting `autocallTrigger`, `callType`, or
 | Field | Unit | Material |
 |---|---|---|
 | `couponRate` | percent | ✅ |
+| `stepUp` (coupon step-up per period) | percent | |
 | `couponBarrier` | percent | |
 | `settlementType` | text | |
 | `memoryCoupon` | bool | |
@@ -241,8 +249,19 @@ observe per period — the call columns come back null.
   the issuer's election ("we may, at our election, redeem", "callable at the
   issuer's option/discretion"). When unstated but an autocall trigger level is
   defined, downstream treats it as automatic — leave null and note it.
-- **`firstCallDate`** — the end of the no-call period; the earliest date the
-  note can be called. May be phrased as "callable on any Observation Date on
-  or after…".
+- **`firstCallDate` / `nonCallPeriodMonths`** — two statements of the same
+  call protection. Documents give either a period ("Non-Call Period: 6
+  months", shorthand "NC6"/"NC1") or a date ("callable on any Observation
+  Date on or after…", or the first date in a redemption-dates list). Record
+  whichever is **stated** with evidence and derive the other (report it under
+  `derived`). Ground truth check: the first observation-schedule row with a
+  non-null call level IS the first call date.
+- **`stepDown` / `stepUp`** — the observation schedule rows are ground truth:
+  a declining per-row autocall level is a step-down; a rising per-row coupon
+  or call premium is a step-up. Extract the scalar per-period rate only when
+  the document states the rule ("the Trigger Level will decrease by 5.00% on
+  each anniversary", "the Contingent Coupon Rate increases by 0.25% each
+  quarter") — if the pattern exists only as a printed table, the rows carry
+  it and the scalar stays null with a note. When both exist they must agree.
 - **`callPremium`** — snowball notes accrue a premium to the call date;
   phoenix notes redeem at par (premium 0/null).

@@ -161,6 +161,14 @@ happen (each one is a bug class the payout-grapher validator was built for):
 - **Arithmetic consistency.** Per-period coupon × frequency ≈ stated annual
   rate; observation dates fall between trade and maturity; initial level ×
   barrier percent ≈ stated barrier level.
+- **Step features and non-call period match the schedule.** The observation
+  schedule rows are ground truth: a declining per-row call level is the
+  step-down, a rising per-row coupon/premium is the step-up, and the first
+  row with a non-null call level marks the end of the non-call period. A
+  stated `stepDown`/`stepUp` rate or `firstCallDate`/`nonCallPeriodMonths`
+  that doesn't reproduce what the rows show is an extraction error — and a
+  flat call-level column alongside an extracted step rate means one of the
+  two is wrong.
 
 ### 6. Output
 
