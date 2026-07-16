@@ -1,4 +1,4 @@
-# /troubleshoot — analyze Bloomberg API errors and recommend fixes
+# troubleshoot — analyze Bloomberg API errors and recommend fixes
 
 ## Purpose
 Take a stack trace, error message, or misbehavior description and produce a

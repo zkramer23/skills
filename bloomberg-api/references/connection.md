@@ -85,10 +85,15 @@ Retry **connection establishment**, not business requests, blindly:
 ```python
 def _start(self, attempts: int = 3, base_delay: float = 2.0) -> None:
     for attempt in range(1, attempts + 1):
-        if self._session.start() and self._session.openService(REFDATA):
-            return
-        logger.warning("Bloomberg start failed (attempt %d/%d)", attempt, attempts)
-        time.sleep(base_delay * 2 ** (attempt - 1))   # 2s, 4s, 8s
+        session = self._new_session()  # a Session may only be started once
+        if session.start():
+            if session.openService(REFDATA):
+                self._session = session
+                return
+            session.stop()
+        if attempt < attempts:
+            logger.warning("Bloomberg start failed (attempt %d/%d)", attempt, attempts)
+            time.sleep(base_delay * 2 ** (attempt - 1))   # 2s, then 4s
     raise BloombergConnectionError(...)
 ```
 

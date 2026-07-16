@@ -1,4 +1,4 @@
-# /mock-data — generate realistic mocked Bloomberg responses for tests
+# mock — generate realistic mocked Bloomberg responses for tests
 
 ## Purpose
 Produce test doubles and fixture data shaped exactly like the real client's
@@ -7,7 +7,7 @@ output, so business logic tests run with no Terminal
 
 ## Expected inputs
 - Which provider methods the code under test calls (`get_reference`,
-  `get_history`, …)
+  `get_history`, …) and which typed result each returns
 - The scenario: happy path, missing security, field exception, disruption
   day, barrier-edge values
 
@@ -18,8 +18,8 @@ output, so business logic tests run with no Terminal
 2. Make numbers **internally consistent**: closes near initial levels;
    worst-of scenarios where the intended underlier is actually worst; dates
    that are real weekdays aligned to the observation schedule.
-3. Always include the error frame — even empty — so tests exercise the real
-   return shape.
+3. Always include every result frame — including empty `bulk`/`errors` frames
+   with their real schema — so tests exercise the actual contract.
 4. For barrier tests, generate the tell-tale triple: clearly above, clearly
    below, and **exactly at** the barrier (the `>=` case).
 5. Realistic imperfections on request: a missing date (holiday), one
@@ -29,7 +29,8 @@ output, so business logic tests run with no Terminal
 ## Output format
 Pytest-ready code: a `MockProvider` class or fixture returning Polars frames,
 plus the scenario table as literals. Column names/types must match the real
-client exactly (`security | date | PX_LAST`, `RefResult(data, errors)`).
+client exactly (`security | date | PX_LAST`, `RefResult(data, bulk, errors)`,
+`HistoryResult(data, errors)`).
 
 ## Example
 "Mock a phoenix note that misses two coupons then pays with memory" →

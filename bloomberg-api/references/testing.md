@@ -2,21 +2,27 @@
 
 The Desktop API needs a logged-in Terminal on the developer's machine — CI
 has none, and half your dev loop shouldn't need one either. The architecture
-already solves this: business logic depends on a `MarketDataProvider`
-Protocol, so tests inject fakes.
+already solves this: business logic depends on the narrow capability Protocol
+it actually uses (`ReferenceDataProvider`, `HistoryDataProvider`, or
+`BarDataProvider`), so tests inject small fakes. `MarketDataProvider` composes
+all three for clients and workflows that genuinely need every capability.
 
 ## The interface
 
 ```python
-class MarketDataProvider(Protocol):
+class ReferenceDataProvider(Protocol):
     def get_reference(self, securities: Sequence[str], fields: Sequence[str],
                       overrides: Mapping[str, str] | None = None) -> RefResult: ...
+
+class HistoryDataProvider(Protocol):
     def get_history(self, securities: Sequence[str], fields: Sequence[str],
-                    start: date, end: date, *, adjusted: bool = False) -> pl.DataFrame: ...
+                    start: date, end: date, *, adjusted: bool = False,
+                    periodicity: str = "DAILY") -> HistoryResult: ...
 ```
 
-`RefResult` = `(data: pl.DataFrame, errors: pl.DataFrame)` — errors are data
-(see error-handling.md), so mocks can exercise error paths without patching.
+`RefResult` = `(data, bulk, errors)` and `HistoryResult` = `(data, errors)`.
+Every frame keeps a stable schema even when empty. Errors are data (see
+error-handling.md), so mocks can exercise item failures without patching.
 
 ## Three tiers of test doubles
 
@@ -24,18 +30,24 @@ class MarketDataProvider(Protocol):
 
 ```python
 class MockProvider:
-    def __init__(self, history: pl.DataFrame): self._h = history
-    def get_history(self, securities, fields, start, end, *, adjusted=False):
-        return self._h.filter(pl.col("security").is_in(list(securities)))
+    def __init__(self, history: HistoryResult): self._h = history
+    def get_history(self, securities, fields, start, end, *, adjusted=False,
+                    periodicity="DAILY"):
+        return HistoryResult(
+            data=self._h.data.filter(pl.col("security").is_in(list(securities))),
+            errors=self._h.errors,
+        )
 ```
 
-2. **Recorded fixtures (replay)** — for parser and workflow tests. Once, on a
-   Terminal machine, run the real client with `record=True`: every response
-   is serialized (request signature → parquet in `tests/fixtures/bbg/`).
-   `ReplayProvider` loads by signature and fails on a miss, so tests are
-   deterministic and Terminal-free. Re-record deliberately; fixtures are
-   checked in (mind licensing: keep fixtures minimal — a handful of
-   securities/dates, not bulk history dumps).
+2. **Recorded fixtures (replay)** — for parser and workflow tests. Add a small
+   recording decorator around `MarketDataProvider` that serializes each typed
+   result by request signature (for example, Parquet plus a JSON index under
+   `tests/fixtures/bbg/`). This repository does not bundle a recorder or
+   `ReplayProvider`; create them in the consuming project so storage and data-
+   retention policy stay explicit. Replay must fail on a signature miss so
+   tests remain deterministic. Re-record deliberately, and keep fixtures
+   minimal — a handful of securities/dates, not bulk history dumps — subject
+   to the firm's Bloomberg licensing rules.
 
 3. **Live integration tests** — a thin marker-gated suite that runs only on a
    Terminal machine:
@@ -54,7 +66,7 @@ tiers 1–2 always; tier 3 never.
 
 | Layer | Tests | Double |
 |---|---|---|
-| blpapi parsing (`BlpapiClient._parse_*`) | response anatomy → frames; securityError/fieldExceptions extraction | recorded raw fixtures |
+| blpapi parsing (`Element.toPy()` boundary normalization) | response anatomy → scalar/bulk/error frames; securityError/fieldExceptions extraction | recorded raw fixtures |
 | lifecycle math (worst-of, coupons, autocall) | pure functions — table-driven cases incl. boundary (level == barrier exactly) | none needed if pure |
 | workflows (observation processing) | end-to-end over replay data | ReplayProvider |
 | error behavior | unknown security, entitlement denial, timeout | mock raising/returning errors |

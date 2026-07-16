@@ -1,4 +1,4 @@
-# /build-request — business requirement → optimal Bloomberg request
+# request — business requirement → optimal Bloomberg request
 
 ## Purpose
 Translate a business ask ("check if these notes paid their coupons this
@@ -36,7 +36,8 @@ Then the code.
 ## Example
 "Did any of our 12 phoenix notes autocall this quarter?" → dedupe underliers
 (maybe 15 securities) → ONE historical request over the quarter → per-note
-autocall scan (guard: automatic callType only) → summary table CALLED /
+autocall scan (guard: automatic mechanics only; an explicit trigger may resolve
+a null callType) → summary table CALLED /
 NOT CALLED / UNDETERMINED.
 
 ## Pitfalls

@@ -12,6 +12,8 @@ description: >-
   basket pricing, issuer lookups. Trigger even when the user just says "pull
   prices from Bloomberg", "check if this note autocalled", or pastes a blpapi
   stack trace.
+argument-hint: "<reference|history|fields|request|troubleshoot|mock> [details]"
+model: sonnet
 ---
 
 # Bloomberg API for Structured Products
@@ -30,6 +32,13 @@ tests without a Terminal, or computing structured-product lifecycle events
 from market data. For prospectus/term extraction itself, defer to the
 `prospectus-extraction` skill — this skill consumes its output (underliers,
 barriers, schedules) and prices/monitors against Bloomberg.
+
+When invoked explicitly, interpret the first word of `$ARGUMENTS` as the task
+route (`reference`, `history`, `fields`, `request`, `troubleshoot`, or `mock`)
+and the remaining text as the task inputs. If no route is supplied, infer it
+from the request. The supported explicit form is `/bloomberg-api <route> ...`;
+the files under `commands/` are supporting playbooks, not independently
+registered slash commands.
 
 ## Architecture (non-negotiable shape)
 
@@ -173,17 +182,17 @@ hierarchy: [references/error-handling.md](references/error-handling.md).
 
 ## Task playbooks (commands/)
 
-When the user asks for one of these (with or without the slash), read the
-playbook and follow it:
+Route explicit `/bloomberg-api <route> ...` requests and equivalent natural
+language to the matching playbook:
 
-| Ask | Playbook |
+| Route | Playbook |
 |---|---|
-| `/fetch-reference` — snapshot fields for securities | [commands/fetch-reference.md](commands/fetch-reference.md) |
-| `/fetch-history` — time series | [commands/fetch-history.md](commands/fetch-history.md) |
-| `/validate-fields` — sanity-check field mnemonics | [commands/validate-fields.md](commands/validate-fields.md) |
-| `/build-request` — business requirement → optimal request | [commands/build-request.md](commands/build-request.md) |
-| `/troubleshoot` — diagnose a blpapi error/trace | [commands/troubleshoot.md](commands/troubleshoot.md) |
-| `/mock-data` — realistic mocked responses for tests | [commands/mock-data.md](commands/mock-data.md) |
+| `reference` — snapshot fields for securities | [commands/fetch-reference.md](commands/fetch-reference.md) |
+| `history` — time series | [commands/fetch-history.md](commands/fetch-history.md) |
+| `fields` — sanity-check field mnemonics | [commands/validate-fields.md](commands/validate-fields.md) |
+| `request` — business requirement → optimal request | [commands/build-request.md](commands/build-request.md) |
+| `troubleshoot` — diagnose a blpapi error/trace | [commands/troubleshoot.md](commands/troubleshoot.md) |
+| `mock` — realistic mocked responses for tests | [commands/mock-data.md](commands/mock-data.md) |
 
 ## Reference map
 

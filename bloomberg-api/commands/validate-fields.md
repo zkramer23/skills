@@ -1,4 +1,4 @@
-# /validate-fields — review Bloomberg fields for correctness
+# fields — review Bloomberg fields for correctness
 
 ## Purpose
 Audit a list of field mnemonics (in code, a config, or a request) for

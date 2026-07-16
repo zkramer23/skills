@@ -13,6 +13,9 @@ description: >-
   notes (phoenix/snowball), contingent yield notes (CYNs), barrier notes,
   accelerated return notes, digital income notes, dual-directional notes, and
   market-linked CDs.
+argument-hint: "<pdf-or-folder> [json|sqlite|xlsx]"
+model: opus
+context: fork
 ---
 
 # Prospectus Extraction
@@ -39,7 +42,7 @@ level is a compliance incident, not a typo.
 ### 1. Get page-tagged text
 
 ```bash
-uv run <this-skill-dir>/scripts/pdf_to_pages.py document.pdf pages.txt
+uv run "${CLAUDE_SKILL_DIR}/scripts/pdf_to_pages.py" document.pdf pages.txt
 ```
 
 The bundled script (pypdf via uv, no install needed) writes text with
@@ -185,7 +188,7 @@ When the destination is a **database or Excel**, don't hand-build tables —
 flatten the JSON with the bundled exporter:
 
 ```bash
-python3 <this-skill-dir>/scripts/extraction_to_tables.py out_tables/ *.extraction.json [--sqlite notes.db]
+python3 "${CLAUDE_SKILL_DIR}/scripts/extraction_to_tables.py" out_tables/ *.extraction.json [--sqlite notes.db]
 ```
 
 It emits tidy relational CSVs keyed by `document_id` (`documents`, `fields`,

@@ -9,6 +9,7 @@ comes in as a frame, so it tests offline with a mock provider.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date
 
@@ -31,25 +32,58 @@ def basket_returns(closes: pl.DataFrame, basket: list[BasketConstituent]) -> pl.
     A date where ANY constituent lacks a close yields a null basket return —
     a partial basket is not a basket.
     """
-    weights = abs(sum(c.weight for c in basket) - 1.0)
-    if weights > 1e-6:
-        raise ValueError(f"basket weights sum to {1.0 + weights:.4f}, expected 1.0")
+    if not basket:
+        raise ValueError("basket must be non-empty")
+    securities = [constituent.security for constituent in basket]
+    if any(not security.strip() for security in securities):
+        raise ValueError("basket securities must be non-empty")
+    if len(set(securities)) != len(securities):
+        raise ValueError("basket securities must be unique")
+    if any(
+        not math.isfinite(constituent.initial_level) or constituent.initial_level <= 0
+        for constituent in basket
+    ):
+        raise ValueError("basket initial levels must be finite and positive")
+    if any(not math.isfinite(constituent.weight) or constituent.weight < 0 for constituent in basket):
+        raise ValueError("basket weights must be finite and non-negative")
+    weight_sum = sum(constituent.weight for constituent in basket)
+    if abs(weight_sum - 1.0) > 1e-6:
+        raise ValueError(f"basket weights sum to {weight_sum:.4f}, expected 1.0")
+    required = {"security", "date", "PX_LAST"}
+    missing_columns = required.difference(closes.columns)
+    if missing_columns:
+        raise ValueError(f"closes is missing required columns: {sorted(missing_columns)}")
+
+    relevant = closes.filter(pl.col("security").is_in(securities))
+    duplicates = (
+        relevant.group_by(["date", "security"])
+        .len()
+        .filter(pl.col("len") > 1)
+    )
+    if duplicates.height:
+        keys = duplicates.select("date", "security").to_dicts()
+        raise ValueError(f"duplicate close rows for basket keys: {keys}")
 
     terms = pl.DataFrame([{"security": c.security, "initial": c.initial_level,
                            "weight": c.weight} for c in basket])
-    perf = (closes.join(terms, on="security", how="inner")
+    perf = (relevant.join(terms, on="security", how="inner")
                   .with_columns(contrib=pl.col("weight") * pl.col("PX_LAST") / pl.col("initial")))
     return (perf.group_by("date")
-                .agg(n=pl.len(),
+                .agg(n=pl.col("security").n_unique(),
+                     n_values=pl.col("PX_LAST").count(),
                      basket_level=pl.col("contrib").sum())
                 .with_columns(
-                    basket_level=pl.when(pl.col("n") == len(basket))
+                    basket_level=pl.when(
+                                       (pl.col("n") == len(basket))
+                                       & (pl.col("n_values") == len(basket)))
                                    .then(pl.col("basket_level"))
                                    .otherwise(None),        # incomplete date → null
-                    basket_return=pl.when(pl.col("n") == len(basket))
+                    basket_return=pl.when(
+                                        (pl.col("n") == len(basket))
+                                        & (pl.col("n_values") == len(basket)))
                                     .then(pl.col("basket_level") - 1.0)
                                     .otherwise(None))
-                .drop("n")
+                .drop("n", "n_values")
                 .sort("date"))
 
 
@@ -67,6 +101,9 @@ if __name__ == "__main__":
         BasketConstituent("AS51 Index", 8804.037, 0.075),
     ]
     with HistoryClient() as bbg:
-        closes = bbg.get_history([c.security for c in basket], ["PX_LAST"],
-                                 start=d(2026, 6, 12), end=d(2026, 7, 11))
+        history = bbg.get_history([c.security for c in basket], ["PX_LAST"],
+                                  start=d(2026, 6, 12), end=d(2026, 7, 11))
+    closes = history.data
+    if history.errors.height:
+        logger.warning("Bloomberg history returned %d item errors", history.errors.height)
     print(basket_returns(closes, basket).tail(5))

@@ -12,6 +12,7 @@ called, the note is dead: the scan stops — later coupons don't exist.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date
 
@@ -35,7 +36,27 @@ class NotAutocallableError(ValueError):
 
 def autocall_scan(closes: pl.DataFrame, underliers: list[Underlier],
                   schedule: list[ObservationRow], *, call_type: str | None) -> pl.DataFrame:
-    if call_type != "automatic":
+    if not schedule:
+        raise ValueError("autocall schedule must be non-empty")
+    if len({row.observation_date for row in schedule}) != len(schedule):
+        raise ValueError("autocall observation dates must be unique")
+    if any(
+        row.autocall_level is not None
+        and (not math.isfinite(row.autocall_level) or row.autocall_level < 0)
+        for row in schedule
+    ):
+        raise ValueError("autocall levels must be finite and non-negative when present")
+    if any(
+        row.call_premium is not None
+        and (not math.isfinite(row.call_premium) or row.call_premium < 0)
+        for row in schedule
+    ):
+        raise ValueError("call premiums must be finite and non-negative when present")
+    has_trigger = any(row.autocall_level is not None for row in schedule)
+    effective_call_type = "automatic" if call_type is None and has_trigger else call_type
+    if call_type is None and has_trigger:
+        logger.warning("callType is null; inferring automatic from the trigger schedule")
+    if effective_call_type != "automatic":
         raise NotAutocallableError(
             f"callType={call_type!r}: only trigger-automatic calls are determinable "
             "from market levels. Issuer-elective/no-call notes need a redemption "
@@ -49,12 +70,17 @@ def autocall_scan(closes: pl.DataFrame, underliers: list[Underlier],
     merged = levels.join(worst, on="date", how="left").sort("date")
 
     rows: list[dict[str, object]] = []
+    call_state_unknown = False
     for r in merged.iter_rows(named=True):
+        if call_state_unknown:
+            rows.append({**r, "status": "UNDETERMINED (prior call observation unresolved)"})
+            continue
         if r["autocall_level"] is None:                       # non-call period
             rows.append({**r, "status": "NOT CALLABLE (non-call period)"})
             continue
         if r["worst_perf"] is None:
             rows.append({**r, "status": "UNDETERMINED (missing level — check postponement)"})
+            call_state_unknown = True
             continue
         if r["worst_perf"] >= r["autocall_level"]:            # "at or above"
             rows.append({**r, "status": "CALLED"})
@@ -76,7 +102,9 @@ if __name__ == "__main__":
                 ObservationRow(date(2027, 1, 11), 1.00, None)]
 
     with HistoryClient() as bbg:
-        closes = bbg.get_history([u.security for u in underliers], ["PX_LAST"],
-                                 start=date(2026, 12, 11), end=date(2027, 1, 11))
-    # The Citi note is issuer-callable → this raises NotAutocallableError, by design:
+        history = bbg.get_history([u.security for u in underliers], ["PX_LAST"],
+                                  start=date(2026, 12, 11), end=date(2027, 1, 11))
+    closes = history.data
+    if history.errors.height:
+        logger.warning("Bloomberg history returned %d item errors", history.errors.height)
     print(autocall_scan(closes, underliers, schedule, call_type="automatic"))

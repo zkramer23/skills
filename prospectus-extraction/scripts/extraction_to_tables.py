@@ -77,9 +77,15 @@ def write_sqlite(db_path: str, tables: dict[str, list]) -> None:
 
 def main() -> int:
     args = sys.argv[1:]
+    if any(arg in {"-h", "--help"} for arg in args):
+        print(__doc__)
+        return 0
     db_path = None
     if "--sqlite" in args:
         i = args.index("--sqlite")
+        if i + 1 >= len(args):
+            print("ERROR: --sqlite requires a database path", file=sys.stderr)
+            return 2
         db_path = args[i + 1]
         del args[i : i + 2]
     if len(args) < 2:

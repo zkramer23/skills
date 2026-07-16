@@ -62,12 +62,14 @@ amount, cumulative missed.
 
 ## Autocall determination
 
-Only when `callType == "automatic"` (extraction taxonomy: issuer-elective
-notes are `contingent_yield_note` — for those, record "callable by issuer;
-not determinable from market data"). For automatic calls: on each observation
-date on/after the first call date, called iff worst performance ≥ that date's
-autocall level (per-row levels from the schedule handle step-downs). Once
-called, the note is dead: no further coupons/observations — stop the scan.
+Only when `callType == "automatic"`, or when `callType` is null but an explicit
+trigger schedule establishes automatic mechanics (log that inference).
+Issuer-elective notes are `contingent_yield_note`; for those, record "callable
+by issuer; not determinable from market data". For automatic calls: on each
+observation date on/after the first call date, called iff worst performance ≥
+that date's autocall level. If any eligible call observation is unresolved,
+all later call states remain undetermined until it is resolved. Once called,
+the note is dead: no further coupons/observations — stop the scan.
 
 ## Maturity redemption
 
@@ -92,7 +94,9 @@ for actual indices (analytics on an underlier), not note baskets.
 `ISSUER`, `ULT_PARENT_TICKER_EXCHANGE`, `RTG_MOODY`, `RTG_SP`, `RTG_FITCH`,
 `COUNTRY_ISO`. Feed approved-issuer checks with the ultimate parent, not the
 issuing shell (MSFL is guaranteed by Morgan Stanley; the rating that matters
-is the guarantor's).
+is the guarantor's). Match the complete resolved parent identifier; never
+approve on the ticker prefix alone. For production approvals, join to a
+legal-entity/guarantor master keyed by LEI or another stable identifier.
 
 ## Corporate actions
 

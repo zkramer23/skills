@@ -11,7 +11,7 @@ import logging
 
 import polars as pl
 
-from reference_data import BlpapiClient, RefResult
+from market_data_types import ReferenceDataProvider, RefResult
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ ISSUER_FIELDS = ["ISSUER", "ULT_PARENT_TICKER_EXCHANGE", "COUNTRY_ISO",
                  "RTG_MOODY", "RTG_SP", "RTG_FITCH", "SECURITY_NAME"]
 
 
-def issuer_profile(bbg: BlpapiClient, securities: list[str]) -> pl.DataFrame:
+def issuer_profile(bbg: ReferenceDataProvider, securities: list[str]) -> pl.DataFrame:
     """Wide issuer/rating profile per security (note Corp ticker, /cusip/, or equity)."""
     result: RefResult = bbg.get_reference(securities, ISSUER_FIELDS)
     if result.errors.height:
@@ -31,17 +31,32 @@ def issuer_profile(bbg: BlpapiClient, securities: list[str]) -> pl.DataFrame:
     return result.data.pivot(on="field", index="security", values="value")
 
 
-def check_approved(profile: pl.DataFrame, approved_parents: set[str]) -> pl.DataFrame:
-    """Flag securities whose ULTIMATE PARENT is not on the approved list."""
+def check_approved(
+    profile: pl.DataFrame,
+    approved_parent_identifiers: set[str],
+    *,
+    identity_field: str = "ULT_PARENT_TICKER_EXCHANGE",
+) -> pl.DataFrame:
+    """Match exact parent identifiers; never approve on a ticker prefix alone."""
+    if identity_field not in profile.columns:
+        raise ValueError(f"issuer profile is missing identity field {identity_field!r}")
+    approved = sorted(value.strip().upper() for value in approved_parent_identifiers)
     return profile.with_columns(
-        approved=pl.col("ULT_PARENT_TICKER_EXCHANGE")
-                   .str.split(" ").list.first()          # "MS UN" → "MS"
-                   .is_in(sorted(approved_parents)))
+        approved=pl.col(identity_field)
+                   .str.strip_chars()
+                   .str.to_uppercase()
+                   .is_in(approved)
+    )
 
 
 if __name__ == "__main__":
+    from reference_data import BlpapiClient
+
     logging.basicConfig(level=logging.INFO)
-    approved = {"MS", "C", "GS", "JPM", "BAC", "UBS", "RY"}
+    # Store the exact resolved parent identifier, including exchange. For a
+    # production approval list prefer a legal-entity/guarantor master keyed by
+    # LEI or another stable identifier and join it before this check.
+    approved = {"MS UN", "C UN", "GS UN", "JPM UN", "BAC UN", "UBSG SE", "RY CN"}
     with BlpapiClient() as bbg:
         profile = issuer_profile(bbg, ["/cusip/17332YQM3"])   # the note itself (Corp)
     print(check_approved(profile, approved))

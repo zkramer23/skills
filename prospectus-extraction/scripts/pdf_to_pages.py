@@ -46,13 +46,19 @@ def normalize(text: str) -> str:
 
 
 def main() -> int:
+    if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
+        print(__doc__)
+        return 0
     args = [a for a in sys.argv[1:] if a != "--raw"]
     raw = "--raw" in sys.argv
-    if not args:
+    if not 1 <= len(args) <= 2:
         print(__doc__, file=sys.stderr)
         return 2
     src = Path(args[0])
     out_path = Path(args[1]) if len(args) > 1 else None
+    if not src.is_file():
+        print(f"ERROR: PDF not found: {src}", file=sys.stderr)
+        return 2
 
     reader = PdfReader(src)
     chunks: list[str] = []

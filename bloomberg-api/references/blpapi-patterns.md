@@ -10,18 +10,28 @@ def _collect(self, request: blpapi.Request, timeout_ms: int = 30_000) -> list[bl
     self._session.sendRequest(request, correlationId=cid)
 
     messages: list[blpapi.Message] = []
+    deadline = time.monotonic() + timeout_ms / 1000
     while True:
-        event = self._session.nextEvent(timeout_ms)
+        remaining_ms = int((deadline - time.monotonic()) * 1000)
+        if remaining_ms <= 0:
+            self._session.cancel(cid)
+            raise BloombergTimeoutError(f"Request exceeded {timeout_ms}ms")
+        event = self._session.nextEvent(remaining_ms)
         if event.eventType() == blpapi.Event.TIMEOUT:
-            raise BloombergTimeoutError(f"No response within {timeout_ms}ms")
+            self._session.cancel(cid)
+            raise BloombergTimeoutError(f"Request exceeded {timeout_ms}ms")
+        matched = False
         for msg in event:
-            if not msg.correlationIds() or msg.correlationIds()[0] != cid:
+            if cid not in msg.correlationIds():
                 self._handle_admin(msg)          # session/service status
                 continue
+            matched = True
             if msg.hasElement("responseError"):  # request-level failure
                 raise BloombergRequestError(str(msg.getElement("responseError")))
             messages.append(msg)
-        if event.eventType() == blpapi.Event.RESPONSE:   # final event
+        if event.eventType() == blpapi.Event.REQUEST_STATUS and matched:
+            raise BloombergRequestError(str(messages[-1]))
+        if event.eventType() == blpapi.Event.RESPONSE and matched:  # this request's final event
             return messages
         # PARTIAL_RESPONSE → keep looping and accumulating
 ```
@@ -33,8 +43,9 @@ The three rules encoded there:
    the first event "randomly" misses securities.
 2. **Match on correlation id.** Other traffic (admin events, other requests
    on a shared session) interleaves on the same queue.
-3. **Timeout every `nextEvent()`.** Without it, a dead Terminal = a hung
-   process.
+3. **Enforce one total request deadline.** Recompute the remaining timeout for
+   every `nextEvent()`; otherwise other events can keep resetting a per-call
+   timeout forever.
 
 ## Correlation IDs
 
@@ -66,7 +77,9 @@ for i in range(sec_data.numValues()):
     row = sec_data.getValueAsElement(i)
 ```
 
-Bulk fields are arrays *inside* `fieldData` — same iteration one level down.
+Bulk fields are arrays *inside* `fieldData`. On current SDKs, `Element.toPy()`
+converts scalar, array, and complex elements to native Python values; use it at
+the boundary, then serialize bulk rows losslessly into the typed result.
 
 ## Response anatomy (ReferenceDataResponse)
 

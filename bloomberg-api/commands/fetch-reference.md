@@ -1,4 +1,4 @@
-# /fetch-reference — generate a ReferenceDataRequest
+# reference — generate a ReferenceDataRequest
 
 ## Purpose
 Produce production-ready code (or run it, if a Terminal is present) for a
@@ -16,14 +16,16 @@ point-in-time snapshot of fields across securities.
 2. **Choose fields** via references/field-guide.md; if the user described the
    data in English, propose mnemonics and note any to verify in `FLDS`.
 3. Confirm a snapshot is right — if the user needs values on past dates, this
-   is `/fetch-history` instead (or `END_DATE_OVERRIDE` for a single as-of).
+   is the `history` route instead (or `END_DATE_OVERRIDE` for a single as-of).
 4. Generate code on the `BlpapiClient.get_reference` pattern
-   (examples/reference_data.py): batched, partial-safe, error frame returned.
+   (examples/reference_data.py): batched, partial-safe, scalar/bulk/error frames
+   returned with stable schemas.
 
 ## Output format
-One request for all securities/fields. Return `RefResult(data, errors)`:
-long-format Polars frame (`security | field | value`) plus a structured error
-frame. Show the user both.
+One request for all securities/fields. Return `RefResult(data, bulk, errors)`:
+long-format scalar data (`security | field | value | value_type`), lossless
+bulk rows (`security | field | row | value_json`), and a structured error
+frame. Show every non-empty frame.
 
 ## Example
 "Get last price, currency, and name for the Citi note's underliers" →

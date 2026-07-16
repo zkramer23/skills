@@ -1,4 +1,4 @@
-# /fetch-history — generate a HistoricalDataRequest
+# history — generate a HistoricalDataRequest
 
 ## Purpose
 Produce code for daily/weekly/monthly time series — the workhorse for
@@ -18,13 +18,14 @@ fixings, observation levels, and barrier monitoring.
    machines get different numbers.
 3. `ACTIVE_DAYS_ONLY` unless the user explicitly wants filled calendars;
    never let fill options fabricate observation-date levels.
-4. Generate on the `HistoryClient.get_history` pattern
-   (examples/historical_data.py). One request for the full range; filter to
-   specific dates locally.
+4. Generate on the `BlpapiClient.get_history` pattern in
+   examples/reference_data.py (examples/historical_data.py shows usage). One
+   request for the full range; filter to specific dates locally.
 
 ## Output format
-Tidy Polars frame `security | date | <fields…>`, sorted, one row per trading
-day per security. Missing security → warning + absent rows, never a crash.
+`HistoryResult(data, errors)`: a sorted Polars frame
+`security | date | <fields…>` plus structured per-security/per-field errors.
+Missing security → an error row + absent data rows, never a crash.
 
 ## Example
 "Closes for the worst-of note's underliers since strike" → one request,
