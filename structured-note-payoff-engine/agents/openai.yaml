@@ -1,0 +1,4 @@
+interface:
+  display_name: "Structured Note Payoff Engine"
+  short_description: "Compile terms into tested payoff scenarios"
+  default_prompt: "Use $structured-note-payoff-engine to compile these note terms and test the payoff at every boundary."

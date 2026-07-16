@@ -10,12 +10,16 @@ The current focus is **structured products**: these skills grew out of tooling I
 |---|---|
 | [`prospectus-extraction`](prospectus-extraction/) | Evidence-grounded term extraction from structured-product offering documents (pricing supplements, term sheets, MLCD disclosures). Classifies the product (phoenix autocall, contingent yield note, snowball, barrier note, dual-directional, ARN, digital income, MLCD), extracts a closed per-type field schema with verbatim page-cited evidence for every value, runs deterministic cross-checks (memory-coupon language, issuer-call vs. autocall, underlier-structure consistency, fee sanity), and outputs a chat summary with the full observation/coupon calendar plus JSON → relational CSVs or SQLite for downstream analysis. |
 | [`bloomberg-api`](bloomberg-api/) | Bloomberg Desktop API (blpapi) reference patterns for structured products. Encodes the session/event-loop patterns (partial responses, correlation IDs, retries), request-type selection, field semantics (official close vs. last, adjusted vs. unadjusted), identifier resolution (display name → ticker, FIGI hierarchy), an error taxonomy with retry rules, and Terminal-free testing via dependency injection and replay fixtures. Includes runnable examples for fixings, worst-of coupon/memory checks, autocall scans (trigger-automatic only), basket pricing, and issuer lookups. Invoke its playbooks through `/bloomberg-api history ...`, `/bloomberg-api troubleshoot ...`, `/bloomberg-api mock ...`, and the other routes documented in the skill. Pairs with `prospectus-extraction`: terms come from the document, levels from Bloomberg. |
+| [`structured-note-payoff-engine`](structured-note-payoff-engine/) | Compiles evidence-backed note terms into a closed payoff specification and deterministically evaluates terminal scenarios, coupons, memory, and automatic-call paths. Includes a pure-standard-library engine plus boundary and invariant guidance. |
+| [`structured-note-monitor`](structured-note-monitor/) | Operates a note inventory as of a fixed date. Joins canonical payoff specs, sourced observations, and official determinations into an auditable event ledger, upcoming calendar, exception queue, note state, and position-scaled cashflows. |
+| [`portfolio-analytics-qa`](portfolio-analytics-qa/) | Audits the financial and data contracts behind returns, risk, dividend, earnings, volatility/options, and liquidity analytics. Includes an independent standard-library oracle for total returns, risk metrics, benchmark alignment, VaR, and liquidation timelines. |
 
 ## How a skill is structured
 
 ```
 skill-name/
 ├── SKILL.md          # routing/model metadata + the workflow
+├── agents/           # optional UI metadata for compatible skill hosts
 ├── commands/         # optional route-specific playbooks
 ├── references/       # deeper docs Claude reads only when needed
 └── scripts/          # deterministic helpers Claude runs instead of rewriting
@@ -36,12 +40,24 @@ Skills auto-trigger on matching prompts in any project, or invoke one explicitly
 ```text
 /bloomberg-api history NDX Index PX_LAST from 2026-01-01
 /prospectus-extraction ./pricing-supplement.pdf json
+/structured-note-payoff-engine ./note.extraction.json scenarios
+/structured-note-monitor ./inventory.json ./observations.json --as-of 2026-07-15
+/portfolio-analytics-qa ./backend/services/risk_service.py audit
 ```
 
-The skills carry their own execution policy: Bloomberg engineering routes use
-Sonnet, while long prospectus reviews use Opus in a forked context. That keeps
-the everyday global model lightweight without under-powering domain work or
-filling the main conversation with an entire prospectus.
+The skills carry their own execution policy: engineering and financial QA use
+Sonnet; long prospectus reviews use Opus in a forked context; portfolio note
+monitoring also forks so a large inventory ledger does not fill the main
+conversation. That keeps the everyday global model lightweight without
+under-powering domain work.
+
+The structured-note workflow is deliberately composable:
+
+```text
+prospectus-extraction → structured-note-payoff-engine → structured-note-monitor
+          terms                    economics                    operations
+              bloomberg-api supplies sourced market observations ────────┘
+```
 
 **claude.ai (web/desktop)** — package a skill into a `.skill` file and upload it under Settings → Capabilities:
 

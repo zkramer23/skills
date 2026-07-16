@@ -1,0 +1,4 @@
+interface:
+  display_name: "Structured Note Monitor"
+  short_description: "Track note events, states, and cashflows"
+  default_prompt: "Use $structured-note-monitor to update this note inventory and produce the as-of event ledger and exception queue."

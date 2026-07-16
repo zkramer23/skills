@@ -1,0 +1,4 @@
+interface:
+  display_name: "Portfolio Analytics QA"
+  short_description: "Audit portfolio metrics and data semantics"
+  default_prompt: "Use $portfolio-analytics-qa to review these analytics for formula, unit, calendar, and edge-case errors."
