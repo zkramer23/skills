@@ -1,8 +1,8 @@
-# Zach Kramer — Claude Skills
+# Zach Kramer — Agent Skills
 
-[Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) for Claude Code and claude.ai, built by [Zach Kramer](https://github.com/zkramer23) — domain workflows distilled into reusable instructions, reference material, and scripts that Claude loads on demand.
+[Agent Skills](https://agentskills.io/) for Claude Code and Codex, built by [Zach Kramer](https://github.com/zkramer23) — domain workflows distilled into reusable instructions, reference material, and scripts that coding agents load on demand.
 
-The current focus is **structured products**: these skills grew out of tooling I've built for ingesting and analyzing structured-note offering documents (autocallables, contingent yield notes, barrier notes, market-linked CDs), and they encode the field taxonomies, classification rules, and validation checks from that work so any Claude session can apply them.
+The current focus is **structured products**: these skills grew out of tooling I've built for ingesting and analyzing structured-note offering documents (autocallables, contingent yield notes, barrier notes, market-linked CDs), and they encode the field taxonomies, classification rules, and validation checks from that work so either coding agent can apply them.
 
 ## Skills
 
@@ -18,16 +18,24 @@ The current focus is **structured products**: these skills grew out of tooling I
 
 ```
 skill-name/
-├── SKILL.md          # routing/model metadata + the workflow
+├── SKILL.md          # routing metadata + the workflow
 ├── agents/           # optional UI metadata for compatible skill hosts
 ├── commands/         # optional route-specific playbooks
 ├── references/       # deeper docs Claude reads only when needed
 └── scripts/          # deterministic helpers Claude runs instead of rewriting
 ```
 
-Skills use progressive disclosure: the frontmatter description is always in Claude's context (it's how the skill triggers), the SKILL.md body loads when the skill activates, and reference files load only when the task needs them. Deterministic, repetitive work (PDF text extraction, JSON flattening) lives in bundled scripts so every invocation behaves identically.
+Skills use progressive disclosure: the host initially sees frontmatter metadata
+(including the trigger description), the `SKILL.md` body loads when the skill
+activates, and reference files load only when the task needs them.
+Deterministic, repetitive work (PDF text extraction, JSON flattening) lives in
+bundled scripts so every invocation behaves identically.
 
 ## Using these skills
+
+See the full [Claude Code and Codex usage guide](USAGE.md) for installation,
+host differences, invocation examples for every skill, the structured-note
+pipeline, updating, and troubleshooting.
 
 **Claude Code** — clone into your skills directory:
 
@@ -45,11 +53,21 @@ Skills auto-trigger on matching prompts in any project, or invoke one explicitly
 /portfolio-analytics-qa ./backend/services/risk_service.py audit
 ```
 
-The skills carry their own execution policy: engineering and financial QA use
-Sonnet; long prospectus reviews use Opus in a forked context; portfolio note
-monitoring also forks so a large inventory ledger does not fill the main
-conversation. That keeps the everyday global model lightweight without
-under-powering domain work.
+**Codex** — generate portable copies in the standard personal skills directory:
+
+```bash
+python3 ~/.claude/skills/scripts/install_codex_skills.py
+```
+
+Then mention a skill in the prompt with `$skill-name`, or select one through
+`/skills`. The generated copies live under `~/.agents/skills`; keep this
+repository as the source of truth.
+
+In Claude Code, the skills carry their own execution policy: engineering and
+financial QA use Sonnet; long prospectus reviews use Opus in a forked context;
+portfolio note monitoring also forks so a large inventory ledger does not fill
+the main conversation. Codex uses the active session model and the portable
+copies produced by the installer.
 
 The structured-note workflow is deliberately composable:
 
@@ -65,7 +83,10 @@ prospectus-extraction → structured-note-payoff-engine → structured-note-moni
 cd skill-name && zip -r ../skill-name.skill .
 ```
 
-**Scripts** — no environment setup. Python scripts are either pure stdlib or declare their own dependencies inline ([PEP 723](https://peps.python.org/pep-0723/)) and run via [`uv run`](https://docs.astral.sh/uv/).
+**Scripts** — deterministic helpers are either pure Python standard library or
+declare their dependencies inline ([PEP 723](https://peps.python.org/pep-0723/))
+and run via [`uv run`](https://docs.astral.sh/uv/). Live Bloomberg access still
+requires the Desktop API environment described in the usage guide.
 
 ## Conventions
 
